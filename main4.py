@@ -1,41 +1,53 @@
-import cv2
+import tensorflow as tf
+from tensorflow.keras import layers, models
+import matplotlib.pyplot as plt
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-# Load the pre-trained Haar Cascade Classifier for face detection
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# Load MNIST dataset
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
 
-# Start video capture from the default webcam (0)
-cap = cv2.VideoCapture(0)
+# Normalize the data
+x_train, x_test = x_train / 255.0, x_test / 255.0
 
-if not cap.isOpened():
-    print("Error: Could not open camera.")
-    exit()
+# Reshape the data to fit the neural network
+x_train = x_train.reshape(-1, 28 * 28)
+x_test = x_test.reshape(-1, 28 * 28)
 
-while True:
-    # Capture frame-by-frame
-    ret, frame = cap.read()
+# Data Augmentation
+datagen = ImageDataGenerator(
+    rotation_range=10, 
+    zoom_range=0.1, 
+    width_shift_range=0.1, 
+    height_shift_range=0.1
+)
+datagen.fit(x_train)
 
-    # If frame is read correctly, ret will be True
-    if not ret:
-        print("Error: Failed to capture image")
-        break
+# Build the model
+model = models.Sequential([
+    layers.Flatten(input_shape=(28 * 28,)),
+    layers.Dense(128, activation=tf.keras.layers.LeakyReLU(alpha=0.1)),
+    layers.Dense(64, activation=tf.keras.layers.LeakyReLU(alpha=0.1)),
+    layers.Dense(10, activation='softmax')
+])
 
-    # Convert frame to grayscale (Face detection works better on grayscale)
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+# Compile the model
+model.compile(
+    optimizer='rmsprop', 
+    loss='sparse_categorical_crossentropy', 
+    metrics=['accuracy']
+)
 
-    # Detect faces in the grayscale image
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+# Train the model with augmented data
+model.fit(datagen.flow(x_train, y_train, batch_size=32), epochs=10)
 
-    # Draw rectangles around the faces
-    for (x, y, w, h) in faces:
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)  # Blue rectangle with thickness 2
+# Evaluate the model
+test_loss, test_acc = model.evaluate(x_test, y_test)
+print(f"Test accuracy: {test_acc}")
 
-    # Display the resulting frame
-    cv2.imshow('Face Detection - Press q to Quit', frame)
+# Make predictions
+predictions = model.predict(x_test)
 
-    # Break the loop when the 'q' key is pressed
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# Release the capture and close any open windows
-cap.release()
-cv2.destroyAllWindows()
+# Display the first image and prediction
+plt.imshow(x_test[0].reshape(28, 28), cmap=plt.cm.binary)
+plt.title(f"Predicted: {predictions[0].argmax()}")
+plt.show()
