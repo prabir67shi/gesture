@@ -1,66 +1,88 @@
-import cv2
-import numpy as np
+# CANTEEN COMMENT BOX
+# ---------- SETUP (given to you) ----------
+LEXICON = {
+    "delicious": 3,
+    "great": 3,
+    "tasty": 2,
+    "kind": 2,
+    "fresh": 2,
+    "good": 2,
+    "cold": -1,
+    "slow": -1,
+    "bad": -2,
+    "rude": -2,
+    "burnt": -2,
+    "awful": -3,
+}
+NEGATIONS = {"not", "never", "no"}
+PUNCTUATION = ".,!?:;\"'()"
+TEST_COMMENTS = [
+    ("The pasta was delicious and the staff were kind", "HAPPY"),
+    ("The queue was slow and the juice was awful", "UNHAPPY"),
+    ("Not good, the rice was cold", "UNHAPPY"),
+    ("Not bad at all, I will come again", "HAPPY"),
+    ("Lunch is at 1 pm on Fridays", "OK"),
+    ("Great, they ran out of food again", "UNHAPPY"),
+]
 
-def apply_filter(image, ftype):
-    """Apply a filter to the image based on the filter type."""
-    img = image.copy()
-    if ftype == "red_tint":
-        img[:, :, 1] = img[:, :, 0] = 0
-    elif ftype == "green_tint":
-        img[:, :, 0] = img[:, :, 2] = 0
-    elif ftype == "blue_tint":
-        img[:, :, 1] = img[:, :, 2] = 0
-    elif ftype == "sobel":
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        sx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-        sy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        sob = cv2.bitwise_or(sx.astype('uint8'), sy.astype('uint8'))
-        img = cv2.cvtColor(sob, cv2.COLOR_GRAY2BGR)
-    elif ftype == "canny":
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        can = cv2.Canny(gray, 100, 200)
-        img = cv2.cvtColor(can, cv2.COLOR_GRAY2BGR)
-    elif ftype == "cartoon":
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.medianBlur(gray, 5)
-        edges = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 9, 9
-        )
-        color = cv2.bilateralFilter(image, 9, 300, 300)
-        img = cv2.bitwise_and(color, color, mask=edges)
-    return img
 
-def main():
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Cannot open camera")
-        return
-    ftype = "original"
-    print("Keys: r=Red, g=Green, b=Blue, s=Sobel, c=Canny, t=Cartoon, q=Quit")
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Can't receive frame")
-            break
-        out = apply_filter(frame, ftype)
-        cv2.imshow("Filter", out)
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('r'):
-            ftype = "red_tint"
-        elif key == ord('g'):
-            ftype = "green_tint"
-        elif key == ord('b'):
-            ftype = "blue_tint"
-        elif key == ord('s'):
-            ftype = "sobel"
-        elif key == ord('c'):
-            ftype = "canny"
-        elif key == ord('t'):
-            ftype = "cartoon"
-        elif key == ord('q'):
-            break
-    cap.release()
-    cv2.destroyAllWindows()
+# ---------- PART 1: clean the words ----------
+def clean_words(comment):
+    words = []
+    for word in comment.split():
+        cleaned = word.lower().strip(PUNCTUATION)
+        if cleaned:
+            words.append(cleaned)
+    return words
 
-if __name__ == "__main__":
-    main()
+
+print("PART 1: Clean words")
+print(clean_words("Not GOOD, the rice was cold!"))
+
+
+# ---------- PART 2: score the comment ----------
+def comment_score(comment):
+    score = 0
+    flip = False
+    for word in clean_words(comment):
+        if word in NEGATIONS:
+            flip = True
+        elif word in LEXICON:
+            points = LEXICON[word]
+            if flip:
+                points = -points
+                flip = False
+            score += points
+    return score
+
+
+print("\nPART 2: Score")
+print(comment_score("Not good, the rice was cold"))
+
+
+# ---------- PART 3: decide the mood ----------
+def mood(comment):
+    score = comment_score(comment)
+    if score >= 1:
+        return "HAPPY"
+    elif score <= -1:
+        return "UNHAPPY"
+    else:
+        return "OK"
+
+
+print("\nPART 3: Mood")
+print(mood("The pasta was delicious and the staff were kind"))
+
+
+# ---------- PART 4: check every test comment ----------
+print("\nPART 4: Test all comments")
+mistakes = 0
+for comment, expected in TEST_COMMENTS:
+    current_mood = mood(comment)
+    current_score = comment_score(comment)
+    if current_mood != expected:
+        mistakes += 1
+    print(current_mood, current_score, comment)
+
+print(f"Mistakes: {mistakes} out of {len(TEST_COMMENTS)}")
